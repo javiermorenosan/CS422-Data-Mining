@@ -1,0 +1,263 @@
+---
+title: "CS 422: Homework 2"
+subtitle: "2. Practicum problems"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+author: Javier Moreno Sanchez de las Matas
+---
+
+## 2.1 Decission tree classification
+```{r}
+library(dplyr)
+library(rpart)
+library(caret)
+library(e1071)
+library(rpart.plot)
+library(ROCR)
+library(randomForest)
+library(arules)
+
+rm(list=ls())
+setwd("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw2")
+
+adultTrain.df <- read.csv("adult-train.csv", header=T, sep=",")
+adultTest.df <- read.csv("adult-test.csv", header=T, sep=",")
+
+set.seed(1122)
+```
+### a)
+#### We observe that the attributes that have "?" in them are workclass, occupation and native_country for both the train and test datasets and we clean the datasets removing the rows containing "?"
+```{r}
+sum(adultTrain.df$workclass == "?")
+sum(adultTrain.df$occupation == "?")
+sum(adultTrain.df$native_country == "?")
+
+sum(adultTest.df$workclass == "?")
+sum(adultTest.df$occupation == "?")
+sum(adultTest.df$native_country == "?")
+
+indexes <- which(adultTrain.df$workclass=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+indexes <- which(adultTrain.df$occupation=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+indexes <- which(adultTrain.df$native_country=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+
+indexes <- which(adultTest.df$workclass=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+indexes <- which(adultTest.df$occupation=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+indexes <- which(adultTest.df$native_country=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+
+```
+### b)
+#### i. The summary() function gives us some information about the model. As we can see in the variable importance section of it the three attributes with a higher level of significance are relationship, marital_status and capital_gain.
+```{r}
+model <- rpart(income ~ ., method="class", data=adultTrain.df)
+summary(model)
+```
+#### ii. The first split is done on the relationship predictor, which is the most important variable. We can see it graphically plotting the tree:
+```{r}
+rpart.plot(model, extra=104, fallen.leaves = T, type=4, main="Rpart on Adult Test data (Full Tree)")
+```
+#### In the summary of the model we see that the predicted class in the first node is <=50k and the distribution of observation between the "<=50K" and ">50K" classes is 75.1% and 24.9% respectively.
+
+### c)
+#### i. We run the confusionMatrix() function and obtain the following output:
+```{r}
+pred <- predict(model, adultTest.df, type="class")
+confusionMatrix(pred, as.factor(adultTest.df[, 15]))
+```
+#### We can see that our model has a balanced accuracy of 72.6%.
+#### ii. The balanced error rate of the model is 0.274.
+#### iii. Sensitivity is the ability of our model to correctly identify the true positives, whereas test specificity is the ability of the test to correctly identify those without the true negative. Since in our confusion matrix the positive class is "<=50k" we observe a total of 10,772 true positives, 1,837 false positives, 1,863 true negatives and 588 false negatives leading to a sensitivity of 94.8% and a specificity of 50.4%.
+
+```{r}
+pred.rocr <- predict(model, newdata=adultTest.df, type="prob")[,2]
+f.pred <- prediction(pred.rocr, adultTest.df$income)
+f.perf <- performance(f.pred, "tpr", "fpr")
+plot(f.perf, colorize=T, lwd=3)
+abline(0,1)
+auc <- performance(f.pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(auc@y.values[[1]], 3)))
+```
+#### iv. AUC is the Area Under Curve and is a measure of the accuracy of the test. In our case the AUC is 0.843, being 1 the maximum possible value.
+
+### d)
+#### The complexity table of our model is the one that follows:
+```{r}
+options("digits"=5)
+printcp(model)
+```
+```{r echo=FALSE}
+options("digits"=3)
+```
+```{r}
+cpx=model$cptable[which.min(model$cptable[,"xerror"]), "CP"]
+cpx
+```
+#### We see how the cross-validation error (xerror) decreases for each rows. Therefore the tree would not benefit from a pruning.
+
+### e)
+#### i.  The training data set has 22,653 "<=50K" and 7,508 ">50K" observations.
+```{r}
+under50observations <- sum(adultTrain.df$income == "<=50K")
+over50observations <- sum(adultTrain.df$income == ">50K")
+under50observations
+over50observations
+```
+```{r}
+indexesUnder50 <- which(adultTrain.df$income=="<=50K")
+indexesOver50 <- which(adultTrain.df$income==">50K")
+indexesUnder50 <- sample(indexesUnder50, over50observations)
+indexes <- c(indexesUnder50, indexesOver50)
+adultTrain.df <- adultTrain.df[indexes, ]
+sum(adultTrain.df$income == "<=50K")
+sum(adultTrain.df$income == ">50K")
+```
+```{r}
+model2 <- rpart(income ~ ., method="class", data=adultTrain.df)
+summary(model2)
+```
+#### iii. The confusion matrix of this new model is:
+```{r}
+pred <- predict(model2, adultTest.df, type="class")
+confusionMatrix(pred, as.factor(adultTest.df[, 15]))
+```
+#### The balanced accuracy of this new model is 80.9%.
+#### The balanced error rate of the model is 0.191.
+#### The sensitivity is 78.2% and the specificity 83.5%.
+```{r}
+pred.rocr <- predict(model2, newdata=adultTest.df, type="prob")[,2]
+f.pred <- prediction(pred.rocr, adultTest.df$income)
+f.perf <- performance(f.pred, "tpr", "fpr")
+plot(f.perf, colorize=T, lwd=3)
+abline(0,1)
+auc <- performance(f.pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(auc@y.values[[1]], 3)))
+```
+#### The AUC of the model is 0.845.
+
+### f)
+#### Here we summarize the results obtained from both models.
+
+#### Balanced accuracy -> Imbalanced model: 72.6%; Balanced model: 80.3%
+#### Sensitivity -> Imbalanced model: 94.8%; Balanced model: 76.9%
+#### Specificity -> Imbalanced model: 50.4%; Balanced model: 83.8%
+#### Positive predictive value -> Imbalanced model: 85.4%; Balanced model: 93.6%
+#### AUC -> Imbalanced model: 0.843; Balanced model: 0.845
+
+#### We can see how the balanced model has notably higher performance than the imbalanced one since all metrics except sensitivity have improved. In our models "<=50K" class is the positive class. Since in the imbalanced model the training dataset has much more "<=50K" class observations it determines that an observation belongs to this class more often than it should bringing to a higher amount of true positives but also false positives. Therefore, because the sensitivity is the ability of the test to correctly detect positive observations the imbalanced model has a higher sensitivity than the balanced one.
+
+## 2.1 Decission tree classification
+### a)
+```{r}
+adultTrain.df <- read.csv("adult-train.csv", header=T, sep=",")
+adultTest.df <- read.csv("adult-test.csv", header=T, sep=",")
+
+set.seed(1122)
+
+indexes <- which(adultTrain.df$workclass=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+indexes <- which(adultTrain.df$occupation=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+indexes <- which(adultTrain.df$native_country=="?")
+adultTrain.df <- adultTrain.df[-indexes, ]
+
+indexes <- which(adultTest.df$workclass=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+indexes <- which(adultTest.df$occupation=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+indexes <- which(adultTest.df$native_country=="?")
+adultTest.df <- adultTest.df[-indexes, ]
+
+modelRF <- randomForest(income ~ ., data=adultTrain.df, importance = T)
+pred <- predict(modelRF, adultTest.df, type="class")
+confusionMatrix(pred, as.factor(adultTest.df$income))
+```
+#### i. The balanced accuracy of the model is 78.4%
+#### ii.The accuracy of the model is 85.8%
+#### iii. The sensitivity of the model is 93.0% and the specificity is 63.8%
+#### iv. 11,903 observations are labeled "<=50K" and only 3,157 are labeled ">50K".
+#### v. The model has a very high sensitivity, which indicates that it is really good at finding true positive instances, but on the other hand, it does not find true negative instances correctly, because it predicts more often that a observation belongs to the "<=50K" class, the positive class.
+```{r}
+varImpPlot(modelRF)
+```
+#### vi. For MeanDecreaseAccuracy the most important variable is capital_gain and the least one is fnlwgt. And for ManDecreaseGini the most important variable is relationship and the least one is race.
+
+```{r}
+print(modelRF)
+```
+#### vii. Running the command "print(modelRF)" we can see that the model tried 3 variables at each split.
+
+### b)
+```{r}
+mtry <- tuneRF(select(adultTrain.df, age, workclass, fnlwgt, education, education_num, marital_status, occupation, relationship, race, sex, capital_gain, capital_loss, hours_per_week, native_country), adultTrain.df$income, ntreeTry=500, stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+```
+```{r}
+print(mtry)
+```
+#### i. The default value of mtry given the number of predictors of the model is 3, since is the tuneRF() function starts with that value.
+#### ii. We can see that the optimal value for mtry is 2 since it has the lowest error.
+
+```{r}
+modelRFOptimal <- randomForest(income ~ ., data=adultTrain.df, importance = T, mtry = 2)
+pred2 <- predict(modelRFOptimal, adultTest.df, type="class")
+confusionMatrix(pred2, as.factor(adultTest.df$income))
+```
+#### iii. 1. The balanced accuracy of the model is 78.4%
+#### iii. 2. The accuracy of the model is 86%
+#### iii. 3. The sensitivity of the model is 93.5% and the specificity is 63.3%
+```{r}
+varImpPlot(modelRFOptimal)
+```
+
+#### iii. 4. As before, for MeanDecreaseAccuracy the most important variable is capital_gain and the least one is fnlwgt And for ManDecreaseGini the most important variable is now also capital_gain and the least one is still race.
+
+#### iv. We observe that the performance of the model has not improved by using the optimal value of mtry since the error between the two values of mtry only differs in 0.002.
+
+## 2.3 Association rules
+```{r}
+groceries.df <- read.transactions("groceries.csv", format = "basket", sep = ",")
+apriori(groceries.df)
+```
+#### i. With the default configuration of the method apriori() we obtain 0 rules.
+```{r}
+rules <- apriori(groceries.df, parameter = list(supp = 0.001))
+```
+#### ii. With a support value of 0.001 we obtain 410 rules.
+```{r}
+head(sort(itemFrequency(groceries.df, type = "absolute"), decreasing = T))
+```
+#### iii. The most frequent item is the whole milk. It appears 2513 times.
+```{r}
+tail(sort(itemFrequency(groceries.df, type = "absolute"), decreasing = T))
+```
+
+#### iv. The least frequent item is the sound storage medium . It appears only 1 time.
+#### v. The top 5 rules sorted by support are:
+```{r}
+inspect(sort(rules, decreasing = T, by="support")[1:5])
+```
+
+#### vi. The top 5 rules sorted by confidence are:
+```{r}
+inspect(sort(rules, decreasing = T, by="confidence")[1:5])
+```
+#### vi. The bottom 5 rules sorted by support are:
+```{r}
+inspect(sort(rules, decreasing = F, by="support")[1:5])
+```
+#### vi. The bottom 5 rules sorted by confidence are:
+```{r}
+inspect(sort(rules, decreasing = F, by="confidence")[1:5])
+```
+
+
+
+
+
+

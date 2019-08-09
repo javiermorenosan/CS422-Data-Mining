@@ -1,0 +1,273 @@
+---
+title: "CS 422: Homework 3"
+subtitle: "2. Practicum problems"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+author: Javier Moreno Sanchez de las Matas
+---
+
+## 2.1 Decission tree classification
+### a) 
+#### i. The variables are the number of top incisors, bottom incisors, top canines, bottom canines, top premolars, bottom premolars, top molars, and bottom molars. Since the problem consists in find clusters of mammals according to their tooth patterns I do not remove any variable.
+#### ii. Data does not need to be standarize since all attributes have similar values in the same order of magnitude.
+#### iii. The cleaned file is attached to this notbook under the name file19-cleaned.txt
+### b)
+```{r}
+library(factoextra)
+library(dplyr)
+library(cluster)
+library(fpc)
+
+rm(list=ls())
+setwd("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw3")
+
+mammals <- read.csv("file19-cleaned.txt", sep = ",", header = TRUE, row.names = 1)
+mammals.scaled <- as.data.frame(scale(mammals))
+fviz_nbclust(mammals.scaled, kmeans, method = "wss", k.max = 14)
+fviz_nbclust(mammals.scaled, kmeans, method = "silhouette", k.max = 14)
+```
+
+#### i. According to the silhouette method, we observe that the optimal number of clusters is 8 since it has the higher average silhouette width. However, according to the WSS method we see that the optimal number of clusters is 7 or 9, where we see the elbow in the graph. We conclude that the optimal number of clusters is one of these three numbers and we choose 8.
+#### ii.
+```{r}
+k <- kmeans(mammals.scaled, centers=8) 
+fviz_cluster(k, mammals.scaled)
+```
+```{r}
+print(k)
+```
+#### iii. We have 8 clusters of sizes 17, 19, 8, 7, 1, 10, 2 and 2
+```{r}
+cluster1Indices <- which(k$cluster == 1)
+cluster2Indices <- which(k$cluster == 2)
+cluster3Indices <- which(k$cluster == 3)
+cluster4Indices <- which(k$cluster == 4)
+cluster5Indices <- which(k$cluster == 5)
+cluster6Indices <- which(k$cluster == 6)
+cluster7Indices <- which(k$cluster == 7)
+cluster8Indices <- which(k$cluster == 8)
+
+cluster1 <- mammals[cluster1Indices, 0]
+cluster2 <- mammals[cluster2Indices, 0]
+cluster3 <- mammals[cluster3Indices, 0]
+cluster4 <- mammals[cluster4Indices, 0]
+cluster5 <- mammals[cluster5Indices, 0]
+cluster6 <- mammals[cluster6Indices, 0]
+cluster7 <- mammals[cluster7Indices, 0]
+cluster8 <- mammals[cluster8Indices, 0]
+
+cluster1
+cluster2
+cluster3
+cluster4
+cluster5
+cluster6
+cluster7
+cluster8
+```
+#### iv. and v. These are the total SSE an the SSE of each cluster:
+```{r}
+k$tot.withinss
+k$withinss[1]
+k$withinss[2]
+k$withinss[3]
+k$withinss[4]
+k$withinss[5]
+k$withinss[6]
+k$withinss[7]
+k$withinss[8]
+```
+
+#### iv. Observing the animals in each cluster we see that some clusters have sense. For example, cluster 3 contains all bats species cluster 2 felines and cluster 4 is composed by cervidaes such as deer, moose and antelope. However, some clusters are not well formed. Cluster 1, for example, mixes felines (jaguar, ocelot, lynx...) with the wolverine and seal species among others and cluster 6 mixes mole species with the bear, the civet cat (feline) and canis species as the wolf or the fox which does not have to much sense.
+
+## 2.2 Hierarchical clustering
+### a)
+```{r}
+set.seed(1122)
+mammals.sampled <- sample_n(mammals, 35)
+single <- eclust(mammals.sampled, FUNcluster = "hclust", hc_method = "single")
+complete <- eclust(mammals.sampled, FUNcluster = "hclust", hc_method = "complete")
+average <- eclust(mammals.sampled, FUNcluster = "hclust", hc_method = "average")
+
+fviz_dend(single) + geom_hline(yintercept = 2)
+fviz_dend(complete) + geom_hline(yintercept = 2)
+fviz_dend(average) + geom_hline(yintercept = 2)
+
+single.cut<-cutree(single, h=2)
+table(single.cut)
+complete.cut<-cutree(complete, h=2)
+table(complete.cut)
+average.cut<-cutree(average, h=2)
+table(average.cut)
+```
+### b) 
+#### The two-singleton clusters are: 
+#### - Single method (5): {Groundhog, Prairie dog}, {Elk, Reindeer}, {Ocelot, Jaguar}, {Badger, Skunk}, {Silver Hair Bat, Lump nose bat}.
+#### - Complete method (8): {Groundhog, Prairie dog}, {Sea lion, Elephant seal}, {Ocelot, Jaguar}, {Badger, Skunk}, {Racoon, Star nose mole}, {Elk, Reindeer}, {Hoary bat, Pigmy bat}, {Silver Hair Bat, Lump nose bat}.
+#### - Average method (8): {Groundhog, Prairie dog}, {Racoon, Star nose mole}, {Sea lion, Elephant seal}, {Ocelot, Jaguar}, {Badger, Skunk}, {Elk, Reindeer}, {Silver Hair Bat, Lump nose bat}, {Hoary bat, Pigmy bat}.
+
+### c) 
+#### Single method is purer than complete and average methods according to the purity definition, since it produces 5 two-singleton clusters and the others 8 each.
+
+### d) 
+#### Drawing a horizontal line at a height of 2 we obtain 5 clusters for the simple method, 12 clusters for the complete method and 10 clusters for the average method.
+
+### e)
+```{r}
+single2 <- eclust(mammals.sampled, FUNcluster = "hclust", k = 5, hc_method = "single")
+complete2 <- eclust(mammals.sampled, FUNcluster = "hclust", k = 5, hc_method = "complete")
+average2 <- eclust(mammals.sampled, FUNcluster = "hclust", k = 5, hc_method = "average")
+
+fviz_dend(single2)
+fviz_dend(complete2)
+fviz_dend(average2)
+```
+
+### f)
+```{r}
+single.stats <- cluster.stats(dist(mammals.sampled), single2$cluster)
+single.stats$dunn
+single.stats$avg.silwidth
+
+complete.stats <- cluster.stats(dist(mammals.sampled), complete2$cluster)
+complete.stats$dunn
+complete.stats$avg.silwidth
+
+average.stats <- cluster.stats(dist(mammals.sampled), average2$cluster)
+average.stats$dunn
+average.stats$avg.silwidth
+```
+
+### g)
+#### The best method according to the Dunn and the Silhouette widths is the single method since it has greater values for both indicators than the complete and average method.
+
+## 2.3 K-Means and PCA
+### a) 
+
+```{r}
+htru2 <- read.csv("HTRU_2-small.csv", sep = ",", header = TRUE)
+htru2.scaled <- as.data.frame(scale(htru2[, 1:8]))
+
+pca <- prcomp(htru2.scaled)
+names(pca)
+pca$sdev
+pca$rotation <- -pca$rotation
+pca$rotation
+pca$x <- -pca$x
+head(pca$x)
+
+e <- eigen(cov(htru2.scaled))
+var2firstComponents <- (e$values[1]+e$values[2])/(sum(e$values[1:8]))
+var2firstComponents
+```
+
+#### i. Frist two components have a cumulative variance of 0.7854804
+
+#### ii.
+```{r}
+class0Indices <- which(htru2$class == 0)
+class0 <- pca$x[class0Indices, ]
+class1Indices <- which(htru2$class == 1)
+class1 <- pca$x[class1Indices, ]
+
+plot(class0[, 1:2], col = "blue", xlim = c(-12, 12))
+points(class1[, 1:2], col = "red")
+```
+#### iii. We observe that class 0 samples are printed in blue in the negative part of the PC1 axis and class 1 samples in red in the positive part of the PC1 axis. Regarding the PC2 axis, both classes have positive and negative values.
+
+### b)
+#### i.
+```{r}
+k2 <- kmeans(htru2.scaled, centers=2, nstart = 25) 
+fviz_cluster(k2, htru2.scaled)
+```
+#### ii. The shape of the clusters is similar to the plot of the two principal components in a) ii. but rotated.
+
+```{r}
+print(k2)
+```
+
+#### iii. We have two clusters of sizes 8847 and 1153.
+
+```{r}
+length(which(htru2$class == 0))
+length(which(htru2$class == 1))
+```
+
+#### iv. The dataset has 9041 observation of class 0 and 959 observations of class 1.
+
+#### v. Cluster 1 in the graph corresponds to the majority class and cluster 2 to the minority class.
+
+```{r}
+majorityIndices <- which(k2$cluster == 1)
+majorityCluster <- htru2[majorityIndices, ]
+
+length(which(majorityCluster$class == 0))
+length(which(majorityCluster$class == 1))
+```
+
+#### vi. 8624 observations of cluster 1 belongs to the class 0 and 223 to the class 1.
+
+#### vii. Cluster 1 represents class 0.
+
+```{r}
+variance <- k2$betweenss/k2$tot.withinss
+variance
+```
+
+#### viii. The clustering explains a variance of 0.5592811
+
+#### ix. The average Silhouette width of both the clusters is
+
+```{r}
+htru2.stats <- cluster.stats(dist(htru2.scaled), k2$cluster)
+htru2.stats$avg.silwidth
+```
+
+#### x. The per cluster Silhouette width is
+
+```{r}
+htru2.stats$clus.avg.silwidths
+```
+#### Cluster 1 is better than cluster 2 since its Silhouette width is higher.
+
+### c)
+```{r}
+k3 <- kmeans(pca$x[, 1:2], centers=2, nstart = 25)
+fviz_cluster(k3, pca$x[, 1:2])
+```
+
+#### i. We can see how the shape of the two clusters is the same than in a(ii) and the same but rotated than in b(i).
+
+#### ii. The average Silhoutte of both clusters is 
+```{r}
+finalPCA.stats <- cluster.stats(dist(pca$x[, 1:2]), k3$cluster)
+finalPCA.stats$avg.silwidth
+```
+
+#### iii. The per cluster Silhouette width is
+
+```{r}
+finalPCA.stats$clus.avg.silwidths
+```
+
+#### Cluster 1 is better than cluster 2 since its Silhouette width is higher.
+
+#### iv. All Silhouette widths are higher if we apply K-means on the result of the two principal component of the PCA instead of directly on the dataset, leading to the conclusion that performing PCA analysis provides a higher performance.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

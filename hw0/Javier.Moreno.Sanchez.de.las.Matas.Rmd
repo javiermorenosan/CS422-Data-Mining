@@ -1,0 +1,24 @@
+---
+title: "CS 422 Section 04"
+output: html_notebook
+author: Javier Moreno Sanchez de las Matas
+---
+
+```{r}
+print(cars)
+```
+
+```{r}
+plot(cars, main = "The Cars Dataset")
+```
+```{r}
+summary(cars)
+```
+```{r}
+studentsdf <- read.csv("student.csv", header = TRUE, sep = ";")
+studentsdf
+```
+```{r}
+studentsdf <- rbind(studentsdf, data.frame(name = "Brad Pitt", id = 40051, gpa = 2.21, grade = "C"))
+studentsdf
+```

@@ -1,0 +1,185 @@
+---
+title: "CS 422 Section 04"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+
+author: Javier Moreno Sanchez de las Matas
+---
+## Problem 1
+### a)
+```{r}
+library(dplyr)
+library(psych)
+college.df <- read.csv("College.csv", sep=",", header=T)
+head(college.df)
+```
+### b)
+```{r}
+privateCollegeTable <- table(college.df$Private)
+print("Number of Private Colleges")
+privateCollegeTable
+```
+### c)
+```{r}
+privateColleges.df <- filter(college.df, Private == "Yes")
+hist(privateColleges.df$PhD, col = "blue", main = "PhDs in Private Colleges", xlab = "Percent of faculty with PhDs", ylab = "Probability Density", freq = FALSE)
+lines(density(privateColleges.df$PhD), col = "cyan")
+```
+```{r}
+publicColleges.df <- filter(college.df, Private == "No")
+hist(publicColleges.df$PhD, col = "red", main = "PhDs in Public Colleges", xlab = "Percent of faculty with PhDs", ylab = "Probability Density", freq = FALSE)
+lines(density(publicColleges.df$PhD), col = "red4")
+```
+### d)
+```{r}
+gradRateSorted.df <- arrange(college.df, college.df$Grad.Rate)
+select(head(gradRateSorted.df, 5), "Name", "Grad.Rate")
+```
+```{r}
+select(tail(gradRateSorted.df, 5), "Name", "Grad.Rate")
+```
+
+### e)
+#### i.
+```{r}
+summary(college.df)
+```
+#### ii.
+```{r}
+pairs(college.df[,1:10])
+```
+#### iii.
+```{r}
+boxplot(perc.alumni~Private, data=college.df, xlab="Private Colleges", ylab="perc.alumni", main="Alumni donations by type of college", col=c("red", "blue"))
+```
+#### iv.
+```{r}
+boxplot(PhD~Private, data=college.df, xlab="Private Colleges", ylab="Percentage of PhDs", main="PhDs by type of college", col=c("red", "blue"))
+```
+#### v.
+```{r}
+Elite <- rep("No", nrow(college.df))
+Elite[college.df$Top10perc > 50] <- "Yes"
+Elite <- as.factor(Elite)
+college.df <- data.frame(college.df, Elite)
+summary(college.df)
+```
+#### vi.
+```{r}
+par(mfrow=c(2,2))
+hist(privateColleges.df$F.Undergrad, col = "blue", main = "F.Undergrad in Private Colleges", xlab = "Number of full-time undergraduates
+", ylab = "Probability Density", freq = FALSE)
+hist(publicColleges.df$F.Undergrad, col = "red", main = "F.Undergrad in Public Colleges", xlab = "Number of full-time undergraduates
+", ylab = "Probability Density", freq = FALSE)
+hist(privateColleges.df$Expend, col = "blue", main = "Expenditure in Private Colleges", xlab = "Instructional expenditure per student", ylab = "Probability Density", freq = FALSE)
+hist(publicColleges.df$Expend, col = "red", main = "Expenditure in Public Colleges", xlab = "Instructional expenditure per student", ylab = "Probability Density", freq = FALSE)
+```
+## Linear regression
+### a) Clean the dataset
+#### i.
+```{r}
+autompg.df <- read.csv("auto-mpg.csv", sep=",", header=T)
+indexes <- which(autompg.df$horsepower=="?")
+autompg.df <- autompg.df[-indexes, ]
+indexes
+```
+#### ii.
+```{r}
+str(autompg.df)
+```
+```{r}
+autompg.df$horsepower <- as.integer(autompg.df$horsepower)
+str(autompg.df)
+```
+### b) Simple regression
+```{r}
+pairs.panels(autompg.df)
+```
+```{r}
+pairs.panels(select(autompg.df, "mpg", "weight"))
+```
+```{r}
+model <- lm(mpg ~ weight, data=autompg.df)
+summary(model)
+```
+```{r}
+RMSE <- sqrt(mean((autompg.df$mpg - model$fit)^2))
+print(RMSE)
+```
+
+### c)
+```{r}
+plot(autompg.df$weight, autompg.df$mpg, main="Linear regression mpg ~ weight", xlab="Weight", ylab="mpg")
+abline(model, col="red")
+```
+```{r}
+set.seed(1122)
+index <- sample(1:nrow(autompg.df), 0.80*dim(autompg.df)[1])
+train.df <- autompg.df[index, ]
+test.df <- autompg.df[-index, ]
+```
+### d) Multiple regression
+```{r}
+mModel <- lm(mpg ~ weight + cylinders + displacement + horsepower + acceleration + model.year + origin, data=train.df)
+summary(mModel)
+```
+```{r}
+RMSE <- sqrt(mean((train.df$mpg - mModel$fit)^2))
+print(RMSE)
+```
+### e)
+```{r}
+mModel2 <- lm(mpg ~ weight + model.year + origin, data=train.df)
+summary(mModel2)
+```
+```{r}
+RMSE <- sqrt(mean((train.df$mpg - mModel2$fit)^2))
+print(RMSE)
+```
+
+### f)
+```{r}
+plot(mModel2, 1)
+```
+### g)
+```{r}
+hist(residuals(mModel2), col="blue", main = "Histogram of residuals of the model", xlab = "Residuals", freq = FALSE)
+lines(density(residuals(mModel2)), col = "cyan")
+```
+### h)
+```{r}
+p <- predict(mModel2, test.df)
+test.df$predicted <- c(p)
+test.df$mpg[test.df$mpg %in% test.df$predicted]
+```
+### i)
+```{r}
+residual <- test.df$mpg-test.df$predicted
+RSS <- sum(residual^2)
+print(RSS)
+TSS <- sum((test.df$mpg - mean(test.df$mpg))^2)
+print(TSS)
+n <- dim(test.df)[1]
+p <- 3
+F <- ((TSS - RSS)/p)/(RSS/(n-p-1))
+print(F)
+RSE  <- sqrt(1/(n-p-1)*RSS)
+print(RSE)
+RMSE <- sqrt(mean((test.df$mpg - test.df$predicted)^2))
+print(RMSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

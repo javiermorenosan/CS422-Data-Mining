@@ -1,0 +1,401 @@
+---
+title: "CS 422: Homework 4"
+subtitle: "2. Practicum problems"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+author: Javier Moreno Sanchez de las Matas
+---
+
+## 2.1 Topic: Locality sensitive hashing
+```{r}
+library(textreuse)
+library(stringr)
+library(dplyr)
+library(lsa)
+
+rm(list=ls())
+setwd("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw4")
+
+movies <- read.csv("movies.csv", sep = ",", header = TRUE)
+ratings <- read.csv("ratings.csv", sep = ",", header = TRUE)
+
+setwd("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw4/hw4.movies")
+
+joined <- merge(x = ratings, y = movies, by = "movieId", all = TRUE)
+usersMovies.df = data.frame(joined$userId, joined$title)
+
+
+for (i in 1:671){
+  indices <- which(usersMovies.df[1] == i)
+  moviesNames <- data.frame(usersMovies.df[indices, 2])[,]
+  fileName <- paste("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw4/hw4.movies/user", i, ".csv", sep="")
+  write.csv(moviesNames, file = fileName, row.names = FALSE)
+  temp <- read.csv(fileName, sep = ",", skip = 1)
+  write.csv(temp, file = fileName, row.names = FALSE)
+}
+
+files <- list.files("/Users/JavierMoreno/Desktop/Chicago/courses/CS422 Data Mining/hw4/hw4.movies", full.names=T)
+
+corpus <- TextReuseCorpus(files, tokenizer = tokenize_ngrams, n = 5, keep_tokens = TRUE)
+```
+
+### a) 
+#### Number of documents:
+```{r}
+length(names(corpus))
+```
+#### Number of shingles:
+```{r}
+shingles <- c()
+for (name in names(corpus)){
+  shinglesDocument <- tokens(corpus[[name]])
+  for (shingle in shinglesDocument){
+    if (shingle %in% shingles == FALSE){
+      shingles <- c(shingles, shingle)
+    }
+  }
+}
+length(shingles)
+```
+### b) 
+```{r}
+d <- corpus[["user20"]]
+```
+#### i. User 20 has rated the following amount of movies:
+```{r}
+length(which(ratings$userId == 20))
+```
+#### ii. First five shingles of the user20 file are:
+```{r}
+head(tokens(d), 5)
+```
+### c)
+```{r}
+candidates <- pairwise_candidates(pairwise_compare(corpus, jaccard_similarity))
+```
+#### i. How many pairs of users have a similarity score of at least 0.60?
+```{r}
+length(which(candidates$score >= 0.60))
+```
+
+#### ii. How many pairs of users have a similarity score of at least 0.50?
+```{r}
+length(which(candidates$score >= 0.50))
+```
+
+#### iii. How many pairs of users have a similarity score of at least 0.40?
+```{r}
+length(which(candidates$score >= 0.40))
+```
+
+#### iv. List all the pair of users who have a similarity score of at least 0.40
+```{r}
+indices <- which(candidates$score >= 0.40)
+pairs04 <- candidates[indices, ]
+pairs04
+```
+
+### d)
+#### i.
+```{r}
+lsh_probability(h=10, b=5, s=0.60)
+lsh_probability(h=12, b=6, s=0.60)
+lsh_probability(h=14, b=7, s=0.60)
+lsh_probability(h=16, b=8, s=0.60)
+lsh_probability(h=18, b=9, s=0.60)
+```
+
+#### ii.
+```{r}
+minhash <- minhash_generator(n=18, seed=100)
+corpus <- TextReuseCorpus(files, tokenizer = tokenize_ngrams, n = 5, keep_tokens = TRUE, minhash_func = minhash)
+```
+#### The first five minhashes of the user 20 are:
+```{r}
+head(minhashes(corpus[["user20"]]), 5)
+```
+
+### e)
+```{r}
+buckets <- lsh(corpus, bands = 9)
+candidates <- lsh_candidates(buckets)
+res <- lsh_compare(candidates, corpus, jaccard_similarity)
+
+```
+
+#### i. No because the previous analysis showed that there are not pairs with a Jaccard similarrity higher than 0.50
+#### ii. List all the pairs of users who have a similarity score of at least 0.40
+```{r}
+indices <- which(res$score >= 0.40)
+pairs04 <- res[indices, ]
+pairs04
+```
+
+#### iii. These 3 pairs are the same as in the previous assessment but now the pair 191-317 does not appear.
+#### iv. LSH requires only 934/224,785 = 0.415% of comparisons of the ones needed in c)
+
+## 2.2 Topic: Content-based recommendation system
+```{r}
+CWID = 20433490
+userId = CWID %% 671
+moviesSampled <- sample_n(movies, 10)
+
+```
+### Building a user profile
+```{r}
+indices <- which(ratings$userId == userId)
+ratedMovies <- ratings[indices, ]
+
+columnNames <- c("movieId", "Action", "Adventure", "Animation", "Children", "Comedy", "Crime", "Documentary", "Drama", "Fantasy",
+"Film-Noir", "Horror", "IMAX", "Musical", "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western", "(no
+genres listed)")
+
+userProfile <- data.frame(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+colnames(userProfile) <- columnNames
+for(i in 1:length(ratedMovies[,1])){
+  userProfile[i, ] <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+}
+for(row in 1:nrow(ratedMovies)){
+  movieId <- ratedMovies[row, 2]
+  indexMovie <- which(movies$movieId == movieId)
+  genres_split <- strsplit(toString(movies[indexMovie, 3]), "[|]")[[1]]
+  for (i in 1:length(ratedMovies[,1])){
+    userProfile[row, 1] <- movieId
+    for (genre in genres_split){
+      userProfile[row, genre] <- 1
+    }
+  }
+}
+avg <- c(mean(userProfile[, 2]), mean(userProfile[, 3]), mean(userProfile[, 4]), mean(userProfile[, 5]), mean(userProfile[, 6]), mean(userProfile[, 7]), mean(userProfile[, 8]), mean(userProfile[, 9]), mean(userProfile[, 10]), mean(userProfile[, 11]), mean(userProfile[, 12]), mean(userProfile[, 13]), mean(userProfile[, 14]), mean(userProfile[, 15]), mean(userProfile[, 16]), mean(userProfile[, 17]), mean(userProfile[, 18]), mean(userProfile[, 19]), mean(userProfile[, 20]), mean(userProfile[, 21]))
+
+```
+### Building a movie profile
+```{r}
+movieProfile <- data.frame(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+colnames(movieProfile) <- columnNames
+for(i in 1:length(moviesSampled[,1])){
+  movieProfile[i, ] <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+}
+for(row in 1:nrow(moviesSampled)){
+  movieId <- moviesSampled[row, 1]
+  indexMovie <- which(movies$movieId == movieId)
+  genres_split <- strsplit(toString(movies[indexMovie, 3]), "[|]")[[1]]
+  for (i in 1:length(moviesSampled[,1])){
+    movieProfile[row, 1] <- movieId
+    for (genre in genres_split){
+      movieProfile[row, genre] <- 1
+    }
+  }
+}
+```
+
+```{r}
+similarities <- data.frame(0," ",0)
+columnNamesSimilarities <- c("movieId", "movieName", "similarity")
+colnames(similarities) <- columnNamesSimilarities
+similarities$movieName <- toString(similarities$movieName)
+
+for(row in 1:nrow(movieProfile)){
+  movieId <- movieProfile[row, 1]
+  movieName <- toString(movies[which(movies$movieId == movieId), 2])
+  movieProfile1 <- as.numeric(as.vector(movieProfile[row, ][-1]))
+  similarity <- cosine(avg, movieProfile1)
+  similarities[row, 1] <- movieId
+  similarities[row, 2] <- movieName
+  similarities[row, 3] <- similarity
+}
+similarities <- similarities[order(-similarities$similarity), ]
+mostSimilar <- head(similarities, 5)
+```
+#### Output of the program:
+```{r}
+print(c("User ID ", userId, "chose the following ten movies:"))
+print(moviesSampled$movieId)
+print("Of these, the following 5 movies are recommended:") 
+print(mostSimilar)
+```
+
+## 2.3 Topic: Collaborative Filtering
+### a) 
+#### User ID 191 provides the following ratings to these movies: 150(4.0), 296(5.0), 380(3.0), and 590(4.0).
+```{r}
+index <- which(ratings$userId == 191 & ratings$movieId == 150)
+ratings[index, "rating"] <- NA
+index <- which(ratings$userId == 191 & ratings$movieId == 296)
+ratings[index, "rating"] <- NA
+index <- which(ratings$userId == 191 & ratings$movieId == 380)
+ratings[index, "rating"] <- NA
+index <- which(ratings$userId == 191 & ratings$movieId == 590)
+ratings[index, "rating"] <- NA
+
+moviesIds <- c(150, 296, 380, 590)
+ratingsMovies <- c(4.0, 5.0, 3.0, 4.0)
+
+indicesMoviesUser191 <- which(ratings$userId == 191)
+moviesUser191 <- ratings[indicesMoviesUser191, "movieId"]
+  
+similarUsersId <- c(513, 317, 415, 375, 64, 556, 82, 225, 657, 266, 568, 50)
+similarities <- c(0.4358974, 0.4033613, 0.3255814, 0.3049645, 0.2753623, 0.2727273, 0.2527473, 0.2420382, 0.2262774, 0.2216216, 0.2105263, 0.2009804)
+similarUsers_df <- data.frame(similarUsersId, similarities)
+
+similarUsers_sampled <- sample_n(similarUsers_df, 5)
+#similarUsers_sampled <- head(similarUsers_df, 5)
+
+ids_sampled <- similarUsers_sampled[1]
+similarities_sampled <- similarUsers_sampled[2]
+
+columnNames2 <- moviesUser191
+U <- data.frame(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+for(i in 1:6){
+  U[i, ] <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+}
+colnames(U) <- columnNames2
+sixUsers <- rbind(191, ids_sampled)
+rowsNames2 <- as.vector(sixUsers[,1])
+rownames(U) <- rowsNames2
+
+for (row in 1:nrow(sixUsers)){
+  userId <- sixUsers[row, ]
+  ncolumn <- 1
+  for (movieId in moviesUser191){
+    index <- which(ratings$userId == userId & ratings$movieId == movieId)
+    if (length(index) != 0){
+      rating <- ratings[index, "rating"]
+      U[row, ncolumn] <- rating
+    }
+    if (length(index) == 0){
+      U[row, ncolumn] <- NA
+    }
+    ncolumn <- ncolumn + 1
+  }
+  ncolumn <- 1
+}
+
+similarUsersOrdered <- similarUsers_sampled[order(-similarities_sampled$similarities), ]
+threeMostSimilarUsers <- head(similarUsersOrdered, 3)
+
+r_x <- c()
+
+for(movie in moviesIds){
+  nom <- 0
+  denom <- 0
+  for (row in 1:nrow(threeMostSimilarUsers)){
+    userId <- threeMostSimilarUsers[row, 1]
+    s <- threeMostSimilarUsers[row, 2]
+    r_y <- U[toString(userId), toString(movie)]
+    nom <- nom + s*r_y
+    denom <- denom + s
+  }
+  r_y <- nom/denom
+  r_x <- c(r_x, r_y)
+}
+
+rmse <- sqrt(sum((ratingsMovies-r_y)^2)/4)
+```
+#### Output of the program:
+```{r}
+print("User ID 191, 5 random user IDs: ")
+print(ids_sampled)
+```
+```{r}
+print("Using user-user similarity, User ID 191 will rate the movies as follows:")
+print("150: ")
+print(r_x[1])
+print("296: ")
+print(r_x[2])
+print("380: ")
+print(r_x[3])
+print("590: ")
+print(r_x[4])
+print("RMSE: ")
+print(rmse)
+```
+
+### b)
+#### The new utility matrix is the transpose of the previous utility matrix.
+```{r}
+U2 <- t(U)
+means <- apply(U2, 1, function(x) mean(x, na.rm=T))
+
+coefficients <- data.frame()
+n <- 1
+for (movie1 in moviesIds){
+  r <- c()
+  x_i <- U2[toString(movie1), ]
+  mean_x <- means[toString(movie1)]
+  for (movie2 in moviesUser191){
+    y_i <- U2[toString(movie2), ]
+    mean_y <- means[toString(movie2)]
+    r_i <- (sum((x_i-mean_x)*(y_i-mean_y), na.rm = TRUE))/(sqrt(sum((x_i-mean_x)^2, na.rm = TRUE))*sqrt(sum((y_i-mean_y)^2, na.rm = TRUE)))
+    r <- c(r, r_i)
+  }
+  coefficients <- rbind(coefficients, r)
+  n <- n+1
+}
+
+rownames(coefficients) <- moviesIds
+colnames(coefficients) <- moviesUser191
+
+coefficients <- t(coefficients)
+
+U2withCoefficients <- cbind(U2, coefficients)
+
+predictedRatings2 <- c()
+
+for (movie1 in moviesIds){
+  print(movie1)
+  coeffs <- data.frame(coefficients[, toString(movie1)], rownames(coefficients))
+  coeffs <- coeffs[order(-coeffs$coef), ]
+  coeffs <- head(coeffs, 4)
+  coeffs <- coeffs[-1,]
+  mostSimilarMovies <- coeffs[2]
+  mostSimilarMoviesSimilarities <- coeffs[1]
+  num <- 0
+  denom <- 0
+  print(coeffs)
+  for(row in 1:nrow(coeffs)){
+    #print(coeffs[row,])
+    s <- coeffs[row, 1]
+    print(s)
+    id <- coeffs[row, 2]
+    print(toString(id))
+    r <- U2withCoefficients[toString(id), "191"]
+    print(r)
+    if (!is.na(r)){
+      num <- num + s*r
+    }
+    denom <- denom + s
+  }
+  r_ix <- num/denom
+  print(r_ix)
+  predictedRatings2 <- c(predictedRatings2, r_ix)
+}
+
+rmse2 <- sqrt(sum((ratingsMovies-predictedRatings2)^2)/4)
+```
+
+#### Output of the program:
+```{r}
+print("User ID 191, 5 random user IDs: ")
+print(ids_sampled)
+```
+
+```{r}
+print("Using item-item similarity, User ID 191 will rate the movies as follows:")
+print("150: ")
+print(predictedRatings2[1])
+print("296: ")
+print(predictedRatings2[2])
+print("380: ")
+print(predictedRatings2[3])
+print("590: ")
+print(predictedRatings2[4])
+print("RMSE: ")
+print(rmse2)
+```
+
+
+
+
